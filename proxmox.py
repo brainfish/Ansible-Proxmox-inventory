@@ -572,12 +572,15 @@ def main():
     parser.add_option('--secret', default=os.environ.get('PROXMOX_SECRET'), dest='secret')
     parser.add_option('--pretty', action="store_true", default=False, dest='pretty')
     parser.add_option('--trust-invalid-certs', action="store_false", default=bool_validate_cert, dest='validate')
-    parser.add_option('--include', action="append", default=[])
-    parser.add_option('--exclude', action="append", default=[])
+    parser.add_option('--include', default=os.environ.get("INCLUDE_FILTER", []), action="append")
+    parser.add_option('--exclude', default=os.environ.get("EXCLUDE_FILTER", []), action="append")
     parser.add_option('--include_ips', action="append", default=[])
     parser.add_option('--exclude_ips', action="append", default=[])
     parser.add_option('--include_ipv6', action="store_true", default=False, dest='include_ipv6')
     (options, args) = parser.parse_args()
+
+    if type(options.list) is str:
+        options.list = options.list.split(";")
 
     if options.list:
         data = main_list(options, config_path)
