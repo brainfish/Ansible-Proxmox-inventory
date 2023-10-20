@@ -131,9 +131,30 @@ class ProxmoxAPI(object):
                         except KeyError:
                             options.secret = None
                     if not options.include:
-                        options.include = config_data["include"]
+                        try:
+                            options.include = config_data["include"]
+                        except KeyError:
+                            options.include = []
                     if not options.exclude:
-                        options.exclude = config_data["exclude"]
+                        try:
+                            options.exclude = config_data["exclude"]
+                        except KeyError:
+                            options.exclude = []
+                    if not options.include_ips:
+                        try:
+                            options.include_ips = config_data["include_ips"]
+                        except KeyError:
+                            options.include_ips = []
+                    if not options.exclude_ips:
+                        try:
+                            options.exclude_ips = config_data["exclude_ips"]
+                        except KeyError:
+                            options.exclude_ips = []
+                    if not options.include_ipv6:
+                        try:
+                            options.include_ipv6 = config_data["include_ipv6"]
+                        except KeyError:
+                            options.include_ipv6 = False
 
         if not options.url:
             raise Exception('Missing mandatory parameter --url (or PROXMOX_URL or "url" key in config file).')
@@ -227,11 +248,19 @@ class ProxmoxAPI(object):
         except HTTPError:
             return False
         
-        try:
-            ip_address = re.search('ip=(\d*\.\d*\.\d*\.\d*)', config['net0']).group(1)
-            return ip_address
-        except:
-            return False
+        found_ip_address = False
+        net_num = 0
+        while 'net{0}'.format(net_num) in config:
+            net_key = 'net{0}'.format(net_num)
+            try:
+                interface_name = re.search('name=([^,]+)', config[net_key]).group(1)
+                ip_address = re.search('ip=([^,/]+)', config[net_key]).group(1)
+                if self.include_interface_name(interface_name) and self.include_ip_address(ip_address):
+                    found_ip_address = ip_address
+            except:
+                pass
+            net_num += 1
+        return found_ip_address
 
     def lxc_hostname(self, node, vm):
         try:
@@ -273,7 +302,8 @@ class ProxmoxAPI(object):
         if networks:
             if type(networks) is dict:
                 for network in networks:
-                    if self.valid_network_interface(network):
+                    if self.include_network_interface(network):
+                        #TODO repro this case because it shouldn't work with the preexisting code
                         for ip_address in network['ip-address']:
                             try:
                                 # IP address validation
@@ -283,34 +313,73 @@ class ProxmoxAPI(object):
                                 pass
             elif type(networks) is list:
                 for network in networks:
-                    if self.valid_network_interface(network):
+                    if self.include_network_interface(network):
                         for ip_address in network['ip-addresses']:
-                            try:
-                                if ip_address['ip-address'] != '127.0.0.1' and socket.inet_aton(ip_address['ip-address']):
-                                    system_info.ip_address = ip_address['ip-address']
-                            except socket.error:
-                                pass
+                            if self.include_ip_address(ip_address['ip-address']):
+                                system_info.ip_address = ip_address['ip-address']
 
         return system_info
 
-    def valid_network_interface(self, network):
+    def valid_ip_address(self, ip_address):
+        if ip_address == '127.0.0.1':
+            return False
+
+        try:
+            # Check if valid IPv4 address
+            socket.inet_pton(socket.AF_INET, ip_address)
+            return True
+        except socket.error:
+            if not self.options.include_ipv6:
+                return False
+            try:
+                # Check if valid IPv6 address
+                socket.inet_pton(socket.AF_INET6, ip_address)
+                return True
+            except socket.error:
+                return False
+
+    def include_ip_address(self, ip_address):
+        if not self.valid_ip_address(ip_address):
+            return False
+
+        include_ip = True
+        if self.options.include_ips:
+            include_ip = False
+            for regex in self.options.include_ips:
+                if re.match(regex, ip_address):
+                    include_ip = True
+                    break
+        
+        exclude_ip = False
+        for regex in self.options.exclude_ips:
+            if re.match(regex, ip_address):
+                exclude_ip = True
+                break
+
+        return include_ip and not exclude_ip
+
+    def include_interface_name(self, interface_name):
+        include_interface = True
+        if self.options.include:
+            include_interface = False
+            for regex in self.options.include:
+                if re.match(regex, interface_name):
+                    include_interface = True
+                    break
+        
+        exclude_interface = False
+        for regex in self.options.exclude:
+            if re.match(regex, interface_name):
+                exclude_interface = True
+                break
+        
+        return include_interface and not exclude_interface
+
+    def include_network_interface(self, network):
         if 'ip-addresses' not in network:
             return False
-        
-        # Include/Exclude are mutally exclusive
-        if len(self.options.include) > 0:
-            for regex in self.options.include:
-                if re.match(regex, network["name"]):
-                    return True
-            return False
-        
-        if len(self.options.exclude) > 0:
-            for regex in self.options.exclude:
-                if re.match(regex, network["name"]):
-                    return False
-            return True
-        
-        return True
+    
+        return self.include_interface_name(network['name'])
 
 class SystemInfo(object):
     id = ""
@@ -502,6 +571,9 @@ def main():
     parser.add_option('--trust-invalid-certs', action="store_false", default=bool_validate_cert, dest='validate')
     parser.add_option('--include', action="append", default=[])
     parser.add_option('--exclude', action="append", default=[])
+    parser.add_option('--include_ips', action="append", default=[])
+    parser.add_option('--exclude_ips', action="append", default=[])
+    parser.add_option('--include_ipv6', action="store_true", default=False, dest='include_ipv6')
     (options, args) = parser.parse_args()
 
     if options.list:
