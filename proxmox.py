@@ -35,6 +35,7 @@ import os
 import sys
 import socket
 import re
+from functools import cache
 from optparse import OptionParser
 
 from six import iteritems
@@ -186,6 +187,7 @@ class ProxmoxAPI(object):
                 'CSRFPreventionToken': data['data']['CSRFPreventionToken'],
             }
 
+    @cache
     def get(self, url, data=None):
         request_path = '{0}{1}'.format(self.options.url, url)
 
