@@ -221,7 +221,7 @@ class ProxmoxAPI(object):
         except HTTPError as error:
             return False
 
-    def openvz_ip_address(self, node, vm):
+    def lxc_ip_address(self, node, vm):
         try:
             config = self.get('api2/json/nodes/{0}/lxc/{1}/config'.format(node, vm))
         except HTTPError:
@@ -232,9 +232,6 @@ class ProxmoxAPI(object):
             return ip_address
         except:
             return False
-
-### PATCH for LXC HOSTNAME 
-### GET HOSTNAME for LXC-Containers
 
     def lxc_hostname(self, node, vm):
         try:
@@ -397,11 +394,11 @@ def main_list(options, config_path):
                     results['_meta']['hostvars'][vm]['proxmox_os_kernel'] = system_info.kernel
                     results['_meta']['hostvars'][vm]['proxmox_os_version_id'] = system_info.version_id
             else:
-             # IF IP is empty (due DHCP, take hostname instead)
-                lxc_ip_address = proxmox_api.openvz_ip_address(node, vmid)
+                lxc_ip_address = proxmox_api.lxc_ip_address(node, vmid)
                 if lxc_ip_address:
                     results['_meta']['hostvars'][vm]['ansible_host'] = lxc_ip_address
                 else:
+                    # IF IP is empty (due DHCP, take hostname instead)
                     results['_meta']['hostvars'][vm]['ansible_host'] = proxmox_api.lxc_hostname(node, vmid)
 
             if 'groups' in metadata:
