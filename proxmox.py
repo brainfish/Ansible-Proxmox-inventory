@@ -347,7 +347,7 @@ class ProxmoxAPI(object):
         return include_interface and not exclude_interface
 
     def valid_ip_address(self, ip_address):
-        if ip_address == '127.0.0.1':
+        if ip_address == '127.0.0.1' or ip_address == '::1' or ip_address.startswith('fe80:'):
             return False
 
         try:
