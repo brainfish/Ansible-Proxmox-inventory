@@ -574,13 +574,16 @@ def main():
     parser.add_option('--trust-invalid-certs', action="store_false", default=bool_validate_cert, dest='validate')
     parser.add_option('--include', default=os.environ.get("INCLUDE_FILTER", []), action="append")
     parser.add_option('--exclude', default=os.environ.get("EXCLUDE_FILTER", []), action="append")
-    parser.add_option('--include_ips', action="append", default=[])
-    parser.add_option('--exclude_ips', action="append", default=[])
-    parser.add_option('--include_ipv6', action="store_true", default=False, dest='include_ipv6')
+    parser.add_option('--include_ips', default=os.environ.get("INCLUDE_IPS_FILTER", []), action="append")
+    parser.add_option('--exclude_ips', default=os.environ.get("EXCLUDE_IPS_FILTER", []), action="append")
+    parser.add_option('--include_ipv6', action="store_true", default=os.environ.get("INCLUDE_IPV6", False), dest='include_ipv6')
     (options, args) = parser.parse_args()
 
-    if type(options.list) is str:
-        options.list = options.list.split(";")
+    for option in ['include', 'exclude', 'include_ips', 'exclude_ips']:
+        # Split env var list options on ';' to allow multiple values and ensure result is a list
+        option_val = getattr(options, option)
+        if isinstance(option_val, str):
+            setattr(options, option, option_val.split(';'))
 
     if options.list:
         data = main_list(options, config_path)

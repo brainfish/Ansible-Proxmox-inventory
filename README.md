@@ -146,15 +146,28 @@ ansible-playbook -i /etc/ansible/proxmox.py --limit='running,!windows' playbook-
 
 You can also pass regex filters for the network interfaces to use on your VM hosts.
 
-```bash
+```sh
 # Ignore any docker network interfaces when determining the IP address
-python proxmox.py --list --exclude "docker.*"
+python proxmox.py --list --exclude='docker.*'
 ```
 
 You can pass multiple parameters of either exclude or include but you cannot use both include and exclude in a single run.  These parameters can also be configured in the config file or through and ENV separated by a `;`
 
-```bash
-export EXCLUDE_LIST="docker.*;veth.*"
+```sh
+export EXCLUDE_FILTER='docker.*;veth.*'
+```
+
+Filtering IP addresses is also possible:
+
+```sh
+# Filter only 10.10.x.y and 192.168.23.z addresses
+python proxmox.py --list --include_ips='10\.10\..*' --include_ips='192\.168\.23\..*'
+```
+
+and can also be accomplished via environment variable
+
+```sh
+export EXCLUDE_IPS_FILTER='10\.10\..*;192\.168\.23\..*'
 ```
 
 ## Examples
