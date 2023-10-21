@@ -151,6 +151,16 @@ class ProxmoxAPI(object):
                             options.exclude_ips = config_data["exclude_ips"]
                         except KeyError:
                             options.exclude_ips = []
+                    if not options.include_cidr:
+                        try:
+                            options.include_cidr = config_data["include_cidr"]
+                        except KeyError:
+                            options.include_cidr = []
+                    if not options.exclude_cidr:
+                        try:
+                            options.exclude_cidr = config_data["exclude_cidr"]
+                        except KeyError:
+                            options.exclude_cidr = []
                     if not options.include_ipv6:
                         try:
                             options.include_ipv6 = config_data["include_ipv6"]
@@ -365,20 +375,31 @@ class ProxmoxAPI(object):
                 return False
 
     def include_ip_address(self, ip_address):
+        # import ipaddress here to contain Python 3.3+ dependency
+        if self.options.include_cidr or self.options.exclude_cidr:
+            import ipaddress # pylint: disable=import-outside-toplevel
         if not self.valid_ip_address(ip_address):
             return False
 
         include_ip = True
-        if self.options.include_ips:
+        if self.options.include_ips or self.options.include_cidr:
             include_ip = False
             for regex in self.options.include_ips:
                 if re.match(regex, ip_address):
+                    include_ip = True
+                    break
+            for cidr in self.options.include_cidr:
+                if ipaddress.ip_address(ip_address) in ipaddress.ip_network(cidr):  
                     include_ip = True
                     break
         
         exclude_ip = False
         for regex in self.options.exclude_ips:
             if re.match(regex, ip_address):
+                exclude_ip = True
+                break
+        for cidr in self.options.exclude_cidr:
+            if ipaddress.ip_address(ip_address) in ipaddress.ip_network(cidr):  
                 exclude_ip = True
                 break
 
@@ -544,6 +565,12 @@ def main_host(options, config_path):
 
     return {}
 
+def get_env_list_variable(env_var):
+    env_value = os.environ.get(env_var, '')
+    if env_value:
+        return env_value.split(';')
+    else:
+        return []
 
 def main():
     config_path = os.path.join(
@@ -572,14 +599,16 @@ def main():
     parser.add_option('--secret', default=os.environ.get('PROXMOX_SECRET'), dest='secret')
     parser.add_option('--pretty', action="store_true", default=False, dest='pretty')
     parser.add_option('--trust-invalid-certs', action="store_false", default=bool_validate_cert, dest='validate')
-    parser.add_option('--include', default=os.environ.get("INCLUDE_FILTER", []), action="append")
-    parser.add_option('--exclude', default=os.environ.get("EXCLUDE_FILTER", []), action="append")
-    parser.add_option('--include_ips', default=os.environ.get("INCLUDE_IPS_FILTER", []), action="append")
-    parser.add_option('--exclude_ips', default=os.environ.get("EXCLUDE_IPS_FILTER", []), action="append")
+    parser.add_option('--include', default=get_env_list_variable("INCLUDE_FILTER"), action="append")
+    parser.add_option('--exclude', default=get_env_list_variable("EXCLUDE_FILTER"), action="append")
+    parser.add_option('--include_ips', default=get_env_list_variable("INCLUDE_IPS_FILTER"), action="append")
+    parser.add_option('--exclude_ips', default=get_env_list_variable("EXCLUDE_IPS_FILTER"), action="append")
+    parser.add_option('--include_cidr', default=get_env_list_variable("INCLUDE_CIDR_FILTER"), action="append")
+    parser.add_option('--exclude_cidr', default=get_env_list_variable("EXCLUDE_CIDR_FILTER"), action="append")
     parser.add_option('--include_ipv6', action="store_true", default=os.environ.get("INCLUDE_IPV6", False), dest='include_ipv6')
     (options, args) = parser.parse_args()
 
-    for option in ['include', 'exclude', 'include_ips', 'exclude_ips']:
+    for option in ['include', 'exclude', 'include_ips', 'exclude_ips', 'include_cidr', 'exclude_cidr']:
         # Split env var list options on ';' to allow multiple values and ensure result is a list
         option_val = getattr(options, option)
         if isinstance(option_val, str):

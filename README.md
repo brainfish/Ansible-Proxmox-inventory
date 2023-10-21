@@ -170,6 +170,19 @@ and can also be accomplished via environment variable
 export EXCLUDE_IPS_FILTER='10\.10\..*;192\.168\.23\..*'
 ```
 
+IP filtering is also available by CIDR:
+
+```sh
+# Filter only 10.10.0.0/16 and 192.168.23.0/24 addresses
+python proxmox.py --list --include_cidr='10.10.0.0/16' --include_cidr='192.168.23.0/24'
+```
+
+and can also be accomplished via environment variable
+
+```sh
+export EXCLUDE_CIDR_FILTER='10.10.0.0/16;192.168.23.0/24'
+```
+
 ## Examples
 
 #### Show Linux distribution version for every VM in Proxmox cluster:
