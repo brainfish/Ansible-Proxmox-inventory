@@ -244,7 +244,8 @@ class ProxmoxAPI(object):
         except HTTPError as error:
             return False
 
-    def lxc_ip_address(self, node, vm):
+    # Get an LXC's IP address
+    def openvz_ip_address(self, node, vm):
         try:
             config = self.get('api2/json/nodes/{0}/lxc/{1}/config'.format(node, vm))
         except HTTPError:
@@ -259,7 +260,7 @@ class ProxmoxAPI(object):
                 ip_address = re.search('ip=([^,/]+)', config[net_key]).group(1)
                 if self.include_interface_name(interface_name) and self.include_ip_address(ip_address):
                     found_ip_address = ip_address
-            except:
+            except AttributeError:
                 pass
             net_num += 1
         return found_ip_address
@@ -304,7 +305,7 @@ class ProxmoxAPI(object):
         if networks:
             if type(networks) is dict:
                 for network in networks:
-                    if self.include_network_interface(network):
+                    if self.valid_network_interface(network):
                         #TODO repro this case because it shouldn't work with the preexisting code
                         for ip_address in network['ip-address']:
                             try:
@@ -315,12 +316,35 @@ class ProxmoxAPI(object):
                                 pass
             elif type(networks) is list:
                 for network in networks:
-                    if self.include_network_interface(network):
+                    if self.valid_network_interface(network):
                         for ip_address in network['ip-addresses']:
                             if self.include_ip_address(ip_address['ip-address']):
                                 system_info.ip_address = ip_address['ip-address']
 
         return system_info
+
+    def valid_network_interface(self, network):
+        if 'ip-addresses' not in network:
+            return False
+    
+        return self.include_interface_name(network['name'])
+
+    def include_interface_name(self, interface_name):
+        include_interface = True
+        if self.options.include:
+            include_interface = False
+            for regex in self.options.include:
+                if re.match(regex, interface_name):
+                    include_interface = True
+                    break
+        
+        exclude_interface = False
+        for regex in self.options.exclude:
+            if re.match(regex, interface_name):
+                exclude_interface = True
+                break
+        
+        return include_interface and not exclude_interface
 
     def valid_ip_address(self, ip_address):
         if ip_address == '127.0.0.1':
@@ -359,29 +383,6 @@ class ProxmoxAPI(object):
                 break
 
         return include_ip and not exclude_ip
-
-    def include_interface_name(self, interface_name):
-        include_interface = True
-        if self.options.include:
-            include_interface = False
-            for regex in self.options.include:
-                if re.match(regex, interface_name):
-                    include_interface = True
-                    break
-        
-        exclude_interface = False
-        for regex in self.options.exclude:
-            if re.match(regex, interface_name):
-                exclude_interface = True
-                break
-        
-        return include_interface and not exclude_interface
-
-    def include_network_interface(self, network):
-        if 'ip-addresses' not in network:
-            return False
-    
-        return self.include_interface_name(network['name'])
 
 class SystemInfo(object):
     id = ""
@@ -465,7 +466,7 @@ def main_list(options, config_path):
                     results['_meta']['hostvars'][vm]['proxmox_os_kernel'] = system_info.kernel
                     results['_meta']['hostvars'][vm]['proxmox_os_version_id'] = system_info.version_id
             else:
-                lxc_ip_address = proxmox_api.lxc_ip_address(node, vmid)
+                lxc_ip_address = proxmox_api.openvz_ip_address(node, vmid)
                 if lxc_ip_address:
                     results['_meta']['hostvars'][vm]['ansible_host'] = lxc_ip_address
                 else:
